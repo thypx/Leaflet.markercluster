@@ -46,7 +46,9 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 		chunkProgress: null, // progress callback: function(processed, total, elapsed) (e.g. for a progress indicator)
 
 		//Options to pass to the L.Polygon constructor
-		polygonOptions: {}
+		polygonOptions: {},
+		// 新增参数用于控制默认聚类或独立聚类，小于此数值，按照分组独立进行聚类，大于等于此数值，按照默认聚类处理。
+		maxClusterNum:20
 	},
 
 	initialize: function (options) {
@@ -997,45 +999,100 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 
 		layer.on(this._childMarkerEventHandlers, this);
 
+		// 获取最大聚类数量
+		const maxClusterNum = this.options.maxClusterNum
+
 		//Find the lowest zoom level to slot this one in
 		for (; zoom >= minZoom; zoom--) {
 			markerPoint = this._map.project(layer.getLatLng(), zoom); // calculate pixel position
 
-			//Try find a cluster close by
-			var closest = gridClusters[zoom].getNearObject(markerPoint);
-			if (closest) {
-				closest._addChild(layer);
-				layer.__parent = closest;
-				return;
+			//获取附近的cluster点
+			const nearClusters = gridClusters[zoom].getNearObjectArr(markerPoint);
+			if (
+				nearClusters &&
+				Array.isArray(nearClusters) &&
+				nearClusters.length > 0
+			) {
+				// 找到最接近的同类组
+				for (let i = 0; i < nearClusters.length; i++) {
+				const nearCluster = nearClusters[i].obj;
+				const count = nearCluster.getChildCount();
+				const markers = nearCluster.getAllChildMarkers();
+
+				// 超过maxClusterNum限制或者找到同类组则添加
+				if (
+					count >= maxClusterNum - 1 ||
+					(markers &&
+					Array.isArray(markers) &&
+					markers.length > 0 &&
+					markers[0].options &&
+					layer.options &&
+					layer.options.groupName === markers[0].options.groupName)
+				) {
+					nearCluster._addChild(layer);
+					layer.__parent = nearCluster;
+					return;
+				}
+				}
 			}
 
+
 			//Try find a marker close by to form a new cluster with
-			closest = gridUnclustered[zoom].getNearObject(markerPoint);
-			if (closest) {
-				var parent = closest.__parent;
-				if (parent) {
-					this._removeLayer(closest, false);
+			const nearMarkers = gridUnclustered[zoom].getNearObjectArr(markerPoint);
+			if (nearMarkers && Array.isArray(nearMarkers) && nearMarkers.length>0) {
+				let waitToRemove = []
+				let waitToAdd = []
+
+				const markerNum = nearMarkers.length
+				// 需要合并所有markers组合成新的cluster
+				if(markerNum>=maxClusterNum-1){
+					nearMarkers.forEach((marker)=>{
+						waitToRemove.push(marker.obj)
+						waitToAdd.push(marker.obj)
+					})
+					waitToAdd.push(layer)
+				}else{
+					for(let i=0;i<nearMarkers.length;i++){
+						const {obj,dist} = nearMarkers[i]
+						if(obj.options && layer.options && layer.options.groupName === obj.options.groupName){
+							waitToAdd = [obj, layer]
+							waitToRemove = [obj]
+							break
+						}
+					}
 				}
 
-				//Create new cluster with these 2 in it
-
-				var newCluster = new this._markerCluster(this, zoom, closest, layer);
-				gridClusters[zoom].addObject(newCluster, this._map.project(newCluster._cLatLng, zoom));
-				closest.__parent = newCluster;
-				layer.__parent = newCluster;
-
-				//First create any new intermediate parent clusters that don't exist
-				var lastParent = newCluster;
-				for (z = zoom - 1; z > parent._zoom; z--) {
-					lastParent = new this._markerCluster(this, z, lastParent);
-					gridClusters[z].addObject(lastParent, this._map.project(closest.getLatLng(), z));
+				if(waitToAdd.length>0){
+					var parent = waitToAdd[0].__parent;
+					// 删除
+					waitToRemove.forEach((rem)=>{
+						var parent = rem.__parent;
+						if (parent) {
+							this._removeLayer(rem, false);
+						}
+					})
+					// 新建
+					//Create new cluster with these 2 in it
+					var newCluster = new this._markerCluster(this, zoom);
+					// 添加
+					waitToAdd.forEach((add)=>{
+						newCluster._addChild(add)
+						add.__parent = newCluster;
+					})
+					gridClusters[zoom].addObject(newCluster, this._map.project(newCluster._cLatLng, zoom));
+					//First create any new intermediate parent clusters that don't exist
+					var lastParent = newCluster;
+					for (z = zoom - 1; z > parent._zoom; z--) {
+						lastParent = new this._markerCluster(this, z, lastParent);
+						gridClusters[z].addObject(lastParent, this._map.project(newCluster._cLatLng, z));
+					}
+					parent._addChild(lastParent);
+					waitToRemove.forEach((rem)=>{
+		               //Remove closest from this zoom level and any above that it is in, replace with newCluster
+					   this._removeFromGridUnclustered(rem, zoom);
+					})
+					return;
 				}
-				parent._addChild(lastParent);
-
-				//Remove closest from this zoom level and any above that it is in, replace with newCluster
-				this._removeFromGridUnclustered(closest, zoom);
-
-				return;
 			}
 
 			//Didn't manage to cluster in at this zoom, record us as a marker here and continue upwards

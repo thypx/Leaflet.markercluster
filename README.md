@@ -11,6 +11,55 @@ For a Leaflet 0.7 compatible version, [use the leaflet-0.7 branch](https://githu
 For a Leaflet 0.5 compatible version, [Download b128e950](https://github.com/Leaflet/Leaflet.markercluster/archive/b128e950d8f5d7da5b60bd0aa9a88f6d3dd17c98.zip)<br>
 For a Leaflet 0.4 compatible version, [Download the 0.2 release](https://github.com/Leaflet/Leaflet.markercluster/archive/0.2.zip)
 
+## 新增
+* MarkerClusterGroup的options增加maxClusterNum接口。
+* 功能说明：控制默认聚类或独立聚类，小于此数值，按照分组独立进行聚类，大于等于此数值，按照默认聚类处理。
+* 参考示例：example/marker-clustering-realworld.10000.html
+```javascript
+		const maxClusterNum = 100
+
+		var map = L.map('map', { center: latlng, zoom: 13, layers: [tiles] });
+
+		var markers = L.markerClusterGroup({
+			chunkedLoading: true,
+			maxClusterNum,
+			iconCreateFunction: function (cluster) {
+				var childCount = cluster.getChildCount();
+				var markers  = cluster.getAllChildMarkers()
+
+				var c = ' marker-cluster-';
+				if (childCount >= maxClusterNum) {
+					c += 'large';
+				} else if (markers[0].options.groupName === 'group1') {
+					c += 'medium';
+				} else {
+					c += 'small';
+				}
+
+				return new L.DivIcon({ html: '<div><span>' + childCount + ' <span aria-label="markers"></span>' + '</span></div>', className: 'marker-cluster' + c, iconSize: new L.Point(40, 40) });
+			},
+		});
+		// 组1
+		for (var i = 0; i < addressPoints.length / 2; i++) {
+			var a = addressPoints[i];
+			var title = a[2];
+			var marker = L.marker(L.latLng(a[0], a[1]), { title: title }); ""
+			marker.options.groupName = 'group1'
+			marker.bindPopup(title);
+			markers.addLayer(marker);
+		}
+		// 组2
+		for (var i = Math.floor(addressPoints.length / 2); i < addressPoints.length; i++) {
+			var a = addressPoints[i];
+			var title = a[2];
+			var marker = L.marker(L.latLng(a[0], a[1]), { title: title });
+			marker.options.groupName = 'group2'
+			marker.bindPopup(title);
+			markers.addLayer(marker);
+		}
+
+```
+
 <!---
 TOC created with gh-md-toc
 https://github.com/ekalinin/github-markdown-toc
