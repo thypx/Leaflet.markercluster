@@ -1,9 +1,10 @@
-
+import RBush from "./thirdParty/rbush";
 L.DistanceGrid = function (cellSize) {
 	this._cellSize = cellSize;
 	this._sqCellSize = cellSize * cellSize;
 	this._grid = {};
 	this._objectPoint = { };
+	this._rbush = new RBush()
 };
 
 L.DistanceGrid.prototype = {
@@ -18,6 +19,16 @@ L.DistanceGrid.prototype = {
 
 		this._objectPoint[stamp] = point;
 
+		const rbushItem = {
+			minX: point.x - this._cellSize,
+			minY: point.y - this._cellSize,
+			maxX: point.x + this._cellSize,
+			maxY: point.y + this._cellSize,
+			point,
+			obj
+		}
+		// 插入索引
+		this._rbush.insert(rbushItem)
 		cell.push(obj);
 	},
 
@@ -36,6 +47,16 @@ L.DistanceGrid.prototype = {
 		    i, len;
 
 		delete this._objectPoint[L.Util.stamp(obj)];
+
+		// 删除索引
+		this._rbush.remove({
+			minX: point.x - this._cellSize,
+			minY: point.y - this._cellSize,
+			maxX: point.x + this._cellSize,
+			maxY: point.y + this._cellSize,
+			point,
+			obj
+		})
 
 		for (i = 0, len = cell.length; i < len; i++) {
 			if (cell[i] === obj) {
@@ -105,14 +126,13 @@ L.DistanceGrid.prototype = {
 		return closest;
 	},
 
-	getNearObjectArr(point){
+	getNearObjectArr(point,closestDist){
 		var x = this._getCoord(point.x),
 		    y = this._getCoord(point.y),
 		    i, j, k, row, cell, len, obj, dist,
 		    objectPoint = this._objectPoint,
-		    closestDistSq = this._sqCellSize,
+		    closestDistSq =closestDist || this._sqCellSize,
 		    objectArr = [];
-
 		for (i = y - 1; i <= y + 1; i++) {
 			row = this._grid[i];
 			if (row) {
@@ -128,7 +148,8 @@ L.DistanceGrid.prototype = {
 								closestDistSq = dist;
 								objectArr.push({
 									obj,
-									dist
+									dist,
+									point:objectPoint[L.Util.stamp(obj)]
 								})
 							}
 						}
