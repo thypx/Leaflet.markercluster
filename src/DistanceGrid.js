@@ -33,7 +33,7 @@ L.DistanceGrid.prototype = {
 	},
 
 	updateObject: function (obj, point) {
-		this.removeObject(obj);
+		this.removeObject(obj, point);
 		this.addObject(obj, point);
 	},
 
@@ -157,7 +157,7 @@ L.DistanceGrid.prototype = {
 				}
 			}
 		}
-		objectArr.sort((a,b)=>a-b)
+		objectArr.sort((a,b)=>a.dist-b.dist)
 		return objectArr;
 	},
 

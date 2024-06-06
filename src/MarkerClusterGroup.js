@@ -730,6 +730,56 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 			this._moveChild(e.target, dragStart, e.target._latlng);
 		}		
 	},
+	_replaceClusterParent(cluster, parent){
+		var gridClusters = this._gridClusters,
+		gridUnclustered = this._gridUnclustered,
+		map = this._map;
+
+
+		//Update distance grid
+		const clusterPoint =  map.project(cluster._cLatLng, cluster._zoom)
+		gridClusters[cluster._zoom].removeObject(cluster,clusterPoint);
+
+		// 添加数据
+		cluster._markers.forEach((marker)=>{
+			parent._addChild(marker, false);
+			marker.__parent = parent
+		})
+		cluster._childClusters.forEach((cluster=>{
+			parent._addChild(cluster, false);
+		}))
+		//Move otherMarker up to parent
+		this._arraySplice(cluster.__parent._childClusters, cluster);
+		// 父节点处理
+		cluster = cluster.__parent;
+		// 遍历删除
+		while (cluster) {
+			cluster._boundsNeedUpdate = true;
+			cluster._iconNeedsUpdate = true;
+			let count = 0
+			cluster._childClusters.forEach((cluster)=>{
+				count += cluster.getChildCount()
+			})
+			count+=cluster._markers.length
+			cluster._childCount = count
+			if (count <= 1) { //Cluster no longer required
+				//Update distance grid
+				gridClusters[cluster._zoom].removeObject(cluster, map.project(cluster._cLatLng, cluster._zoom));
+				//Move otherMarker up to parent
+				this._arraySplice(cluster.__parent._childClusters, cluster);
+				// move marker
+				if(cluster._markers.length===1){
+					//We need to push the other marker up to the parent
+					var otherMarker = cluster._markers[0] 
+					this._removeFromGridUnclustered(otherMarker, this._maxZoom);
+					gridUnclustered[cluster._zoom].addObject(otherMarker, map.project(otherMarker.getLatLng(), cluster._zoom));
+					cluster.__parent._markers.push(otherMarker);
+					otherMarker.__parent = cluster.__parent;
+				}
+			}
+			cluster = cluster.__parent;
+		}
+	},
 
 
 	//Internal function for removing a marker from everything.
@@ -1005,34 +1055,44 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 		//Find the lowest zoom level to slot this one in
 		for (; zoom >= minZoom; zoom--) {
 			markerPoint = this._map.project(layer.getLatLng(), zoom); // calculate pixel position
-
 			//获取附近的cluster点
-			const nearClusters = gridClusters[zoom].getNearObjectArr(markerPoint);
+			let nearClusters = gridClusters[zoom].getNearObjectArr(markerPoint);
 			if (
 				nearClusters &&
 				Array.isArray(nearClusters) &&
 				nearClusters.length > 0
 			) {
+				// 合并聚类
+				// const count = nearClusters.reduce((pre,cur)=>pre + cur.obj.getChildCount(),0)
+				// if(count>=maxClusterNum-1){
+				// 	const parent = nearClusters[0].obj;
+				// 	for(let i=1;i<nearClusters.length;i++){
+				// 		this._replaceClusterParent(nearClusters[i].obj, parent)
+				// 	}
+					
+				// 	parent._addChild(layer);
+				// 	layer.__parent = parent;
+				// 	return
+				// }
 				// 找到最接近的同类组
 				for (let i = 0; i < nearClusters.length; i++) {
-				const nearCluster = nearClusters[i].obj;
-				const count = nearCluster.getChildCount();
-				const markers = nearCluster.getAllChildMarkers();
-
-				// 超过maxClusterNum限制或者找到同类组则添加
-				if (
-					count >= maxClusterNum - 1 ||
-					(markers &&
-					Array.isArray(markers) &&
-					markers.length > 0 &&
-					markers[0].options &&
-					layer.options &&
-					layer.options.groupName === markers[0].options.groupName)
-				) {
-					nearCluster._addChild(layer);
-					layer.__parent = nearCluster;
-					return;
-				}
+					const nearCluster = nearClusters[i].obj;
+					const count = nearCluster.getChildCount();
+					const markers = nearCluster.getAllChildMarkers();
+					// 超过maxClusterNum限制或者找到同类组则添加
+					if (
+						count >= maxClusterNum - 1 ||
+						(markers &&
+						Array.isArray(markers) &&
+						markers.length > 0 &&
+						markers[0].options &&
+						layer.options &&
+						layer.options.groupName === markers[0].options.groupName)
+					) {
+						nearCluster._addChild(layer);
+						layer.__parent = nearCluster;
+						return;
+					}
 				}
 			}
 			// 查找未聚类点，组成新的cluster

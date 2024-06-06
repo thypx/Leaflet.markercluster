@@ -92,14 +92,16 @@
             
             // 如果cluster内图标都相同，则就用该图标
             var first = markers[0]
-            var isSome = markers.every((marker)=> marker.options.groupName === first.options.groupName)
+            var isSame = markers.every((marker)=> marker.options.groupName === first.options.groupName)
             
-            if (childCount >= maxClusterNum && !isSome) {
+            if (childCount >= maxClusterNum && !isSame) {
               c += "large";
-            } else if (markers[0].options.groupName === "group1") {
+            } else if (markers[0].options.groupName === "group1" && isSame) {
               c += "medium";
-            } else {
+            } else if(markers[0].options.groupName === "group2" && isSame) {
               c += "small";
+            }else{
+              c += "large";
             }
 
             return new L.DivIcon({
