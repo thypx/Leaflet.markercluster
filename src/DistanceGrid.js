@@ -1,4 +1,3 @@
-
 L.DistanceGrid = function (cellSize) {
 	this._cellSize = cellSize;
 	this._sqCellSize = cellSize * cellSize;
@@ -22,7 +21,7 @@ L.DistanceGrid.prototype = {
 	},
 
 	updateObject: function (obj, point) {
-		this.removeObject(obj);
+		this.removeObject(obj, point);
 		this.addObject(obj, point);
 	},
 
@@ -36,6 +35,7 @@ L.DistanceGrid.prototype = {
 		    i, len;
 
 		delete this._objectPoint[L.Util.stamp(obj)];
+
 
 		for (i = 0, len = cell.length; i < len; i++) {
 			if (cell[i] === obj) {
@@ -105,14 +105,13 @@ L.DistanceGrid.prototype = {
 		return closest;
 	},
 
-	getNearObjectArr(point){
+	getNearObjectArr(point,closestDist){
 		var x = this._getCoord(point.x),
 		    y = this._getCoord(point.y),
 		    i, j, k, row, cell, len, obj, dist,
 		    objectPoint = this._objectPoint,
-		    closestDistSq = this._sqCellSize,
+		    closestDistSq =closestDist || this._sqCellSize,
 		    objectArr = [];
-
 		for (i = y - 1; i <= y + 1; i++) {
 			row = this._grid[i];
 			if (row) {
@@ -128,7 +127,8 @@ L.DistanceGrid.prototype = {
 								closestDistSq = dist;
 								objectArr.push({
 									obj,
-									dist
+									dist,
+									point:objectPoint[L.Util.stamp(obj)]
 								})
 							}
 						}
@@ -136,7 +136,7 @@ L.DistanceGrid.prototype = {
 				}
 			}
 		}
-		objectArr.sort((a,b)=>a-b)
+		objectArr.sort((a,b)=>a.dist-b.dist)
 		return objectArr;
 	},
 

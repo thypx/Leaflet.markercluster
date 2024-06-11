@@ -2,6 +2,8 @@
  * L.MarkerClusterGroup extends L.FeatureGroup by clustering the markers contained within
  */
 
+import RBush from "./thirdParty/rbush";
+
 export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 
 	options: {
@@ -77,6 +79,7 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 			'dragend': this._childMarkerDragEnd,
 		};
 
+		this._rbush = new RBush()
 		// Hook the appropriate animation methods.
 		var animate = L.DomUtil.TRANSITION && this.options.animate;
 		L.extend(this, animate ? this._withAnimation : this._noAnimation);
@@ -731,7 +734,6 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 		}		
 	},
 
-
 	//Internal function for removing a marker from everything.
 	//dontUpdateMap: set to true if you will handle updating the map manually (for bulk functions)
 	_removeLayer: function (marker, removeFromDistanceGrid, dontUpdateMap) {
@@ -1005,9 +1007,8 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 		//Find the lowest zoom level to slot this one in
 		for (; zoom >= minZoom; zoom--) {
 			markerPoint = this._map.project(layer.getLatLng(), zoom); // calculate pixel position
-
 			//获取附近的cluster点
-			const nearClusters = gridClusters[zoom].getNearObjectArr(markerPoint);
+			let nearClusters = gridClusters[zoom].getNearObjectArr(markerPoint);
 			if (
 				nearClusters &&
 				Array.isArray(nearClusters) &&
@@ -1015,55 +1016,59 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 			) {
 				// 找到最接近的同类组
 				for (let i = 0; i < nearClusters.length; i++) {
-				const nearCluster = nearClusters[i].obj;
-				const count = nearCluster.getChildCount();
-				const markers = nearCluster.getAllChildMarkers();
-
-				// 超过maxClusterNum限制或者找到同类组则添加
-				if (
-					count >= maxClusterNum - 1 ||
-					(markers &&
-					Array.isArray(markers) &&
-					markers.length > 0 &&
-					markers[0].options &&
-					layer.options &&
-					layer.options.groupName === markers[0].options.groupName)
-				) {
-					nearCluster._addChild(layer);
-					layer.__parent = nearCluster;
-					return;
-				}
+					const nearCluster = nearClusters[i].obj;
+					const count = nearCluster.getChildCount();
+					const markers = nearCluster.getAllChildMarkers();
+					// 超过maxClusterNum限制或者找到同类组则添加
+					if (
+						count >= maxClusterNum - 1 ||
+						(markers &&
+						Array.isArray(markers) &&
+						markers.length > 0 &&
+						markers[0].options &&
+						layer.options &&
+						layer.options.groupName === markers[0].options.groupName)
+					) {
+						nearCluster._addChild(layer);
+						layer.__parent = nearCluster;
+						return;
+					}
 				}
 			}
-
-
+			// 查找未聚类点，组成新的cluster
 			//Try find a marker close by to form a new cluster with
 			const nearMarkers = gridUnclustered[zoom].getNearObjectArr(markerPoint);
-			if (nearMarkers && Array.isArray(nearMarkers) && nearMarkers.length>0) {
+			if (nearMarkers && Array.isArray(nearMarkers)) {
 				let waitToRemove = []
 				let waitToAdd = []
-
+				var parent
 				const markerNum = nearMarkers.length
-				// 需要合并所有markers组合成新的cluster
-				if(markerNum>=maxClusterNum-1){
-					nearMarkers.forEach((marker)=>{
-						waitToRemove.push(marker.obj)
-						waitToAdd.push(marker.obj)
-					})
-					waitToAdd.push(layer)
-				}else{
-					for(let i=0;i<nearMarkers.length;i++){
-						const {obj,dist} = nearMarkers[i]
-						if(obj.options && layer.options && layer.options.groupName === obj.options.groupName){
-							waitToAdd = [obj, layer]
-							waitToRemove = [obj]
-							break
+				if(nearMarkers.length>0){
+					if(markerNum>=maxClusterNum-1){
+						// 大于等于限额，需要合并所有markers组合成新的cluster
+						nearMarkers.forEach((marker)=>{
+							waitToRemove.push(marker.obj)
+							waitToAdd.push(marker.obj)
+						})
+						waitToAdd.push(layer)
+						parent = waitToAdd[0].__parent
+					}else{
+						// 小于限额，则对最近且同组的marker进行合并
+						for(let i=0;i<nearMarkers.length;i++){
+							const {obj,dist} = nearMarkers[i]
+							if(obj.options && layer.options && layer.options.groupName === obj.options.groupName){
+								waitToAdd = [obj, layer]
+								waitToRemove = [obj]
+								break
+							}
+						}
+						if(waitToAdd.length>0){
+							parent = waitToAdd[0].__parent
 						}
 					}
 				}
 
-				if(waitToAdd.length>0){
-					var parent = waitToAdd[0].__parent;
+				if(waitToAdd.length>0 && parent){
 					// 删除
 					waitToRemove.forEach((rem)=>{
 						var parent = rem.__parent;
