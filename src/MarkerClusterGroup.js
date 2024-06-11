@@ -2,6 +2,8 @@
  * L.MarkerClusterGroup extends L.FeatureGroup by clustering the markers contained within
  */
 
+import RBush from "./thirdParty/rbush";
+
 export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 
 	options: {
@@ -77,6 +79,7 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 			'dragend': this._childMarkerDragEnd,
 		};
 
+		this._rbush = new RBush()
 		// Hook the appropriate animation methods.
 		var animate = L.DomUtil.TRANSITION && this.options.animate;
 		L.extend(this, animate ? this._withAnimation : this._noAnimation);
@@ -730,57 +733,6 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 			this._moveChild(e.target, dragStart, e.target._latlng);
 		}		
 	},
-	_replaceClusterParent(cluster, parent){
-		var gridClusters = this._gridClusters,
-		gridUnclustered = this._gridUnclustered,
-		map = this._map;
-
-
-		//Update distance grid
-		const clusterPoint =  map.project(cluster._cLatLng, cluster._zoom)
-		gridClusters[cluster._zoom].removeObject(cluster,clusterPoint);
-
-		// 添加数据
-		cluster._markers.forEach((marker)=>{
-			parent._addChild(marker, false);
-			marker.__parent = parent
-		})
-		cluster._childClusters.forEach((cluster=>{
-			parent._addChild(cluster, false);
-		}))
-		//Move otherMarker up to parent
-		this._arraySplice(cluster.__parent._childClusters, cluster);
-		// 父节点处理
-		cluster = cluster.__parent;
-		// 遍历删除
-		while (cluster) {
-			cluster._boundsNeedUpdate = true;
-			cluster._iconNeedsUpdate = true;
-			let count = 0
-			cluster._childClusters.forEach((cluster)=>{
-				count += cluster.getChildCount()
-			})
-			count+=cluster._markers.length
-			cluster._childCount = count
-			if (count <= 1) { //Cluster no longer required
-				//Update distance grid
-				gridClusters[cluster._zoom].removeObject(cluster, map.project(cluster._cLatLng, cluster._zoom));
-				//Move otherMarker up to parent
-				this._arraySplice(cluster.__parent._childClusters, cluster);
-				// move marker
-				if(cluster._markers.length===1){
-					//We need to push the other marker up to the parent
-					var otherMarker = cluster._markers[0] 
-					this._removeFromGridUnclustered(otherMarker, this._maxZoom);
-					gridUnclustered[cluster._zoom].addObject(otherMarker, map.project(otherMarker.getLatLng(), cluster._zoom));
-					cluster.__parent._markers.push(otherMarker);
-					otherMarker.__parent = cluster.__parent;
-				}
-			}
-			cluster = cluster.__parent;
-		}
-	},
-
 
 	//Internal function for removing a marker from everything.
 	//dontUpdateMap: set to true if you will handle updating the map manually (for bulk functions)
@@ -1062,18 +1014,6 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 				Array.isArray(nearClusters) &&
 				nearClusters.length > 0
 			) {
-				// 合并聚类
-				// const count = nearClusters.reduce((pre,cur)=>pre + cur.obj.getChildCount(),0)
-				// if(count>=maxClusterNum-1){
-				// 	const parent = nearClusters[0].obj;
-				// 	for(let i=1;i<nearClusters.length;i++){
-				// 		this._replaceClusterParent(nearClusters[i].obj, parent)
-				// 	}
-					
-				// 	parent._addChild(layer);
-				// 	layer.__parent = parent;
-				// 	return
-				// }
 				// 找到最接近的同类组
 				for (let i = 0; i < nearClusters.length; i++) {
 					const nearCluster = nearClusters[i].obj;
@@ -1168,25 +1108,6 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 		this._topClusterLevel._addChild(layer);
 		layer.__parent = this._topClusterLevel;
 		return;
-	},
-
-	/**
-	 * @description: 判断是否重叠
-	 * @param {*} gridClusters
-	 * @param {*} zoom
-	 * @param {*} latlng
-	 * @return {*}
-	 */
-   _isClusterCross(gridClusters,zoom,latlng){
-	    const point = this._map.project(latlng, zoom)
-		const rbush = gridClusters[zoom]._rbush
-		const cell = 80
-		return rbush.collides({
-				minX: point.x - cell,
-				minY: point.y - cell,
-				maxX: point.x + cell,
-				maxY: point.y + cell,
-		});
 	},
 
 	/**

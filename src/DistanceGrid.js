@@ -1,10 +1,8 @@
-import RBush from "./thirdParty/rbush";
 L.DistanceGrid = function (cellSize) {
 	this._cellSize = cellSize;
 	this._sqCellSize = cellSize * cellSize;
 	this._grid = {};
 	this._objectPoint = { };
-	this._rbush = new RBush()
 };
 
 L.DistanceGrid.prototype = {
@@ -19,16 +17,6 @@ L.DistanceGrid.prototype = {
 
 		this._objectPoint[stamp] = point;
 
-		const rbushItem = {
-			minX: point.x - this._cellSize,
-			minY: point.y - this._cellSize,
-			maxX: point.x + this._cellSize,
-			maxY: point.y + this._cellSize,
-			point,
-			obj
-		}
-		// 插入索引
-		this._rbush.insert(rbushItem)
 		cell.push(obj);
 	},
 
@@ -48,15 +36,6 @@ L.DistanceGrid.prototype = {
 
 		delete this._objectPoint[L.Util.stamp(obj)];
 
-		// 删除索引
-		this._rbush.remove({
-			minX: point.x - this._cellSize,
-			minY: point.y - this._cellSize,
-			maxX: point.x + this._cellSize,
-			maxY: point.y + this._cellSize,
-			point,
-			obj
-		})
 
 		for (i = 0, len = cell.length; i < len; i++) {
 			if (cell[i] === obj) {
