@@ -50,7 +50,9 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 		//Options to pass to the L.Polygon constructor
 		polygonOptions: {},
 		// 新增参数用于控制默认聚类或独立聚类，小于此数值，按照分组独立进行聚类，大于等于此数值，按照默认聚类处理。
-		maxClusterNum:20
+		maxClusterNum:20,
+		// 聚类簇冲突解决模式
+		collideStrategy:'none'		
 	},
 
 	initialize: function (options) {
@@ -289,7 +291,7 @@ export var MarkerClusterGroup = L.MarkerClusterGroup = L.FeatureGroup.extend({
 
 					this._refreshClustersIcons();
 
-					this._topClusterLevel._recursivelyAddChildrenToMap(null, this._zoom, this._currentShownBounds);
+					this._topClusterLevel._recursivelyAddChildrenToMap(null, this._zoom, this._currentShownBounds, this._rbush, this.options.collideStrategy);
 				} else {
 					setTimeout(process, this.options.chunkDelay);
 				}
@@ -1305,7 +1307,8 @@ L.MarkerClusterGroup.include({
 			    i;
 
 			this._ignoreMove = true;
-
+			this._rbush.clear()
+			const self = this
 			//Add all children of current clusters to map and remove those clusters from map
 			this._topClusterLevel._recursively(bounds, previousZoomLevel, minZoom, function (c) {
 				var startPos = c._latlng,
@@ -1315,7 +1318,6 @@ L.MarkerClusterGroup.include({
 				if (!bounds.contains(startPos)) {
 					startPos = null;
 				}
-
 				if (c._isSingleParent() && previousZoomLevel + 1 === newZoomLevel) { //Immediately add the new child and remove us
 					fg.removeLayer(c);
 					c._recursivelyAddChildrenToMap(null, newZoomLevel, bounds);
@@ -1349,7 +1351,10 @@ L.MarkerClusterGroup.include({
 
 			//update the positions of the just added clusters/markers
 			this._topClusterLevel._recursively(bounds, previousZoomLevel, newZoomLevel, function (c) {
-				c._recursivelyRestoreChildPositions(newZoomLevel);
+			    // 忽略动态避让后偏移点导致触发moveLayer方法
+				self._ignoreMove = true;
+				c._recursivelyRestoreChildPositions(newZoomLevel, self._rbush, self.options.collideStrategy);
+				self._ignoreMove = false;
 			});
 
 			this._ignoreMove = false;
@@ -1365,14 +1370,17 @@ L.MarkerClusterGroup.include({
 				this._animationEnd();
 			});
 		},
-
 		_animationZoomOut: function (previousZoomLevel, newZoomLevel) {
+			this._rbush.clear()
 			this._animationZoomOutSingle(this._topClusterLevel, previousZoomLevel - 1, newZoomLevel);
-
+			// 忽略动态避让后偏移点导致触发moveLayer方法
+			this._ignoreMove = true;
 			//Need to add markers for those that weren't on the map before but are now
-			this._topClusterLevel._recursivelyAddChildrenToMap(null, newZoomLevel, this._getExpandedVisibleBounds());
+			this._topClusterLevel._recursivelyAddChildrenToMap(null, newZoomLevel, this._getExpandedVisibleBounds(), this._rbush, this.options.collideStrategy);
+			this._ignoreMove = false;
 			//Remove markers that were on the map before but won't be now
 			this._topClusterLevel._recursivelyRemoveChildrenFromMap(this._currentShownBounds, Math.floor(this._map.getMinZoom()), previousZoomLevel, this._getExpandedVisibleBounds());
+
 		},
 
 		_animationAddLayer: function (layer, newCluster) {
@@ -1459,6 +1467,18 @@ L.MarkerClusterGroup.include({
 		//Could loop all this._layers and do this for each _icon if it stops working
 
 		L.Util.falseFn(document.body.offsetWidth);
+	},
+
+ /**
+  * @description: 强制动画刷新
+  * @return {*}
+  */
+	forceAnimation(){
+		const mapZoom =map.getZoom()
+		// 开始动画
+		clusterGroup._animationStart()
+		// 结束动画
+		clusterGroup._animationZoomIn(mapZoom-1, mapZoom)
 	}
 });
 

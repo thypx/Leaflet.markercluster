@@ -48,6 +48,7 @@
         <ul class="list">
           <li>分类1的图标:<img src="./asset/icon/group1.png" alt="" /></li>
           <li>分类2的图标:<img src="./asset/icon/group2.png" alt="" /></li>
+          <li>分类3的图标:<img src="./asset/icon/group3.png" alt="" /></li>
           <li>
             超过maxClusterNum后聚合的新图标<img
               src="./asset/icon/cluster.png"
@@ -78,18 +79,16 @@
 
       // 创建clusterGroup
       function createClusterGroup(maxClusterNum,clusterRadius) {
-        console.log('clusterRadius: ', clusterRadius);
         let markers = L.markerClusterGroup({
           chunkedLoading: true,
+          singleMarkerMode:true,
+          collideStrategy:'adjust',
           maxClusterNum,
           maxClusterRadius:clusterRadius,
           iconCreateFunction: function (cluster) {
             var childCount = cluster.getChildCount();
             var markers = cluster.getAllChildMarkers();
-
             var c = " marker-cluster-";
-            
-            
             // 如果cluster内图标都相同，则就用该图标
             var first = markers[0]
             var isSame = markers.every((marker)=> marker.options.groupName === first.options.groupName)
@@ -100,6 +99,8 @@
               c += "medium";
             } else if(markers[0].options.groupName === "group2" && isSame) {
               c += "small";
+            }else if(markers[0].options.groupName === "group3" && isSame) {
+              c += "small1";
             }else{
               c += "large";
             }
@@ -116,42 +117,36 @@
           },
         });
         // 组1
-        for (var i = 0; i < addressPoints.length / 2; i++) {
+        for (var i = 0; i < addressPoints.length; i++) {
           var a = addressPoints[i];
           var title = a[2];
           var marker = L.marker(L.latLng(a[0], a[1]), { title: title });
-          ("");
-          marker.options.groupName = "group1";
+          if(i<3000){
+            marker.options.groupName = "group1";
+          } else if(i>=3000 && i<6000){
+            marker.options.groupName = "group2";
+          }else{
+            marker.options.groupName = "group3";
+          }
+
           marker.bindPopup(title);
+          marker.title = title
           markers.addLayer(marker);
         }
-        // 组2
-        for (
-          var i = Math.floor(addressPoints.length / 2);
-          i < addressPoints.length;
-          i++
-        ) {
-          var a = addressPoints[i];
-          var title = a[2];
-          var marker = L.marker(L.latLng(a[0], a[1]), { title: title });
-          marker.options.groupName = "group2";
-          marker.bindPopup(title);
-          markers.addLayer(marker);
-        }
+      
         markers.on("clusterclick", (e) => {
           console.log("e: ", e);
         });
         return markers;
       }
-
+    
       clusterGroup = createClusterGroup(50, 80);
       map.addLayer(clusterGroup);
-
+      clusterGroup.forceAnimation()
       const input1 = document.getElementById('input1')
       const input2 = document.getElementById('input2')
       let t = null;
       const func = function (e) {
-        console.log('e: ', e);
         if (t !== null) {
           clearTimeout(t);
         }
@@ -161,6 +156,8 @@
           // 添加
           clusterGroup = createClusterGroup(input1.valueAsNumber, input2.valueAsNumber);
           map.addLayer(clusterGroup);
+          clusterGroup.forceAnimation()
+
         }, 500);
       };
       input1.oninput = func
