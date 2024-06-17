@@ -101,6 +101,12 @@
               c += "small";
             }else if(markers[0].options.groupName === "group3" && isSame) {
               c += "small1";
+            }else if(markers[0].options.groupName === "group4" && isSame) {
+              c += "small2";
+            }else if(markers[0].options.groupName === "group5" && isSame) {
+              c += "small3";
+            }else if(markers[0].options.groupName === "group6" && isSame) {
+              c += "small4";
             }else{
               c += "large";
             }
@@ -128,9 +134,6 @@
           }else{
             marker.options.groupName = "group3";
           }
-
-          marker.bindPopup(title);
-          marker.title = title
           markers.addLayer(marker);
         }
       
