@@ -437,7 +437,25 @@ export var MarkerCluster = L.MarkerCluster = L.Marker.extend({
 	},
 
 	_recursivelyRestoreChildPositions: function (zoomLevel ,rbush, collideStrategy) {
-		//Fix positions of child markers
+		const childClusters = this._childClusters.slice().sort((a,b)=>a._childCount - b._childCount)
+		
+		if (zoomLevel - 1 === this._zoom) {
+			//Reposition child clusters
+			for (var j = childClusters.length - 1; j >= 0; j--) {
+				childClusters[j]._restorePosition();
+				if(collideStrategy === 'adjust'){
+					this._adjustClusterOrMarkerStatus(childClusters[j], rbush, zoomLevel)
+				}
+			}
+		} else {
+			for (var k = this._childClusters.length - 1; k >= 0; k--) {
+				this._childClusters[k]._recursivelyRestoreChildPositions(zoomLevel);
+			}
+		}
+	},
+
+	_recursivelyRestoreChildMarkerPositions: function (zoomLevel ,rbush, collideStrategy) {
+		// Fix positions of child markers
 		for (var i = this._markers.length - 1; i >= 0; i--) {
 			var nm = this._markers[i];
 			if (nm._backupLatlng) {
@@ -452,19 +470,11 @@ export var MarkerCluster = L.MarkerCluster = L.Marker.extend({
 			}
 		}
 
-		if (zoomLevel - 1 === this._zoom) {
-			//Reposition child clusters
-			for (var j = this._childClusters.length - 1; j >= 0; j--) {
-				this._childClusters[j]._restorePosition();
-				if(collideStrategy === 'adjust'){
-					this._adjustClusterOrMarkerStatus(this._childClusters[j], rbush, zoomLevel)
-				}
-			}
-		} else {
-			for (var k = this._childClusters.length - 1; k >= 0; k--) {
-				this._childClusters[k]._recursivelyRestoreChildPositions(zoomLevel);
-			}
+		const childClusters = this._childClusters.slice().sort((a,b)=>a._childCount - b._childCount)
+		for (var k = this._childClusters.length - 1; k >= 0; k--) {
+			this._childClusters[k]._recursivelyRestoreChildPositions(zoomLevel);
 		}
+
 	},
 
 	_restorePosition: function () {
@@ -517,16 +527,19 @@ export var MarkerCluster = L.MarkerCluster = L.Marker.extend({
 		    i, c;
 
 		if (zoomLevelToStart <= zoom) {
-			if (runAtEveryLevel) {
-				runAtEveryLevel(this);
-			}
+			// 调整顺序
 			if (runAtBottomLevel && zoom === zoomLevelToStop) {
 				runAtBottomLevel(this);
 			}
+
+			if (runAtEveryLevel) {
+				runAtEveryLevel(this);
+			}
+
 		}
 
-		// 排序，聚类簇大的在前面，先添加，放置被覆盖
-		childClusters.sort((a,b)=>b._childCount - a._childCount)
+		// 排序，聚类簇大的在後面
+		childClusters.sort((a,b)=>a._childCount - b._childCount)
 		if (zoom < zoomLevelToStart || zoom < zoomLevelToStop) {
 			for (i = childClusters.length - 1; i >= 0; i--) {
 				c = childClusters[i];

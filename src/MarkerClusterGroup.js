@@ -1354,6 +1354,7 @@ L.MarkerClusterGroup.include({
 			    // 忽略动态避让后偏移点导致触发moveLayer方法
 				self._ignoreMove = true;
 				c._recursivelyRestoreChildPositions(newZoomLevel, self._rbush, self.options.collideStrategy);
+				c._recursivelyRestoreChildMarkerPositions(newZoomLevel, self._rbush, self.options.collideStrategy)
 				self._ignoreMove = false;
 			});
 
